@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>オセロゲーム</title>
+<style>
+  body { text-align: center; font-family: sans-serif; }
+  canvas { background: #2e7d32; display: block; margin: auto; }
+  #resultOverlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3em;
+    color: white;
+    z-index: 999;
+    display: none;
+    flex-direction: column;
+  }
+  #resultOverlay button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    font-size: 0.5em;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<h1>オセロ（対コンピューター）</h1>
+<label>難易度: 
+  <select id="difficulty">
+    <option value="1">初級</option>
+    <option value="2">中級</option>
+    <option value="3">上級</option>
+  </select>
+</label>
+<canvas id="board" width="400" height="400"></canvas>
+<p id="turn"></p>
+<div id="resultOverlay"></div>
+<script>
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d');
+const resultOverlay = document.getElementById('resultOverlay');
+const size = 8;
+const cellSize = canvas.width / size;
+let board, currentPlayer;
+
+function initGame() {
+  board = Array(size).fill(null).map(() => Array(size).fill(null));
+  board[3][3] = 'white';
+  board[3][4] = 'black';
+  board[4][3] = 'black';
+  board[4][4] = 'white';
+  currentPlayer = 'black';
+  drawBoard();
+  resultOverlay.style.display = 'none';
+}
+
+function drawBoard() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let i = 0; i < size; i++) {
+    for (let j = 0; j < size; j++) {
+      ctx.strokeRect(j * cellSize, i * cellSize, cellSize, cellSize);
+      if (board[i][j]) {
+        ctx.beginPath();
+        ctx.arc(j * cellSize + cellSize/2, i * cellSize + cellSize/2, cellSize/2 - 4, 0, Math.PI*2);
+        ctx.fillStyle = board[i][j];
+        ctx.fill();
+      }
+    }
+  }
+  document.getElementById('turn').innerText = `${currentPlayer === 'black' ? 'あなた（黒）' : 'コンピュータ（白）'} の番です`;
+}
+
+function getFlippableDiscs(x, y, color) {
+  if (board[y][x] !== null) return [];
+  let opponent = color === 'black' ? 'white' : 'black';
+  let directions = [ [-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1] ];
+  let discsToFlip = [];
+  for (let [dx, dy] of directions) {
+    let nx = x + dx;
+    let ny = y + dy;
+    let temp = [];
+    while (nx >= 0 && nx < size && ny >= 0 && ny < size && board[ny][nx] === opponent) {
+      temp.push([nx, ny]);
+      nx += dx;
+      ny += dy;
+    }
+    if (nx >= 0 && nx < size && ny >= 0 && ny < size && board[ny][nx] === color && temp.length > 0) {
+      discsToFlip.push(...temp);
+    }
+  }
+  return discsToFlip;
+}
+
+function makeMove(x, y, player) {
+  let flips = getFlippableDiscs(x, y, player);
+  if (flips.length > 0) {
+    board[y][x] = player;
+    for (let [fx, fy] of flips) {
+      board[fy][fx] = player;
+    }
+    return true;
+  }
+  return false;
+}
+
+function getPossibleMoves(player) {
+  let moves = [];
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (getFlippableDiscs(x, y, player).length > 0) {
+        moves.push([x, y]);
+      }
+    }
+  }
+  return moves;
+}
+
+function computerMove() {
+  let difficulty = parseInt(document.getElementById('difficulty').value);
+  let possibleMoves = getPossibleMoves('white');
+  if (possibleMoves.length === 0) {
+    checkGameOver();
+    currentPlayer = 'black';
+    return;
+  }
+  let move;
+  if (difficulty === 1) {
+    move = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+  } else {
+    move = possibleMoves.sort((a,b) => getFlippableDiscs(b[0], b[1], 'white').length - getFlippableDiscs(a[0], a[1], 'white').length)[0];
+  }
+  makeMove(move[0], move[1], 'white');
+  currentPlayer = 'black';
+  drawBoard();
+  checkGameOver();
+}
+
+function checkGameOver() {
+  if (getPossibleMoves('black').length === 0 && getPossibleMoves('white').length === 0) {
+    let blackCount = board.flat().filter(c => c === 'black').length;
+    let whiteCount = board.flat().filter(c => c === 'white').length;
+    let resultText = blackCount > whiteCount ? 'あなたの勝ち！🎉' : blackCount < whiteCount ? 'コンピュータの勝ち！💻' : '引き分け！🤝';
+    resultOverlay.innerHTML = `<div>${resultText}</div><div>黒: ${blackCount} 白: ${whiteCount}</div><button onclick="initGame()">もう一度遊ぶ</button>`;
+    resultOverlay.style.display = 'flex';
+  }
+}
+
+canvas.addEventListener('click', e => {
+  if (currentPlayer !== 'black') return;
+  let rect = canvas.getBoundingClientRect();
+  let x = Math.floor((e.clientX - rect.left) / cellSize);
+  let y = Math.floor((e.clientY - rect.top) / cellSize);
+  if (makeMove(x, y, 'black')) {
+    currentPlayer = 'white';
+    drawBoard();
+    setTimeout(computerMove, 500);
+  }
+  checkGameOver();
+});
+
+initGame();
+</script>
+</body>
+</html>
